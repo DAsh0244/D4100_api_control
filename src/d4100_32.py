@@ -1,20 +1,21 @@
 import ctypes
-from msl.loadlib import Server32
 from time import sleep
-from itertools import chain
+import os.path as osp
+import os
 
+class D4100_USB_DLL():
+    """A wrapper around the 32-bit USB_dll.dll, thta implements the stock D4100 conteoller firmware api."""
 
-class D4100_USB_DLL(Server32):
-    """A wrapper around a 32-bit C++ library, 'cpp_lib32.dll', that has an 'add' function."""
-
-    def __init__(self, host, port, quiet=False, **kwargs):
+    def __init__(self):
         # Load the 'cpp_lib32' shared-library file using ctypes.CDLL.
-        super().__init__('../lib/D4100_usb.dll', 'cdll', host, port, quiet)
+        self.lib = ctypes.CDLL(osp.join(osp.dirname(osp.abspath(__file__)), os.pardir, 'lib','D4100_usb.dll'))
+        # super().__init__('../lib/D4100_usb.dll', 'cdll', host, port, quiet)
         self.lib.GetFPGARev.restype = ctypes.c_uint
+        # hard coded for now: 
         self.rows = 768
         self.cols = 1024
+        # wait needed to let USB bus catchup
         self.wait = 0.005
-
 
     @staticmethod
     def _split_bytes(rev):
@@ -28,7 +29,7 @@ class D4100_USB_DLL(Server32):
     def get_num_dev(self):
         # The Server32 class has a 'lib' property that is a reference to the ctypes.CDLL object.
         # The shared library’s 'add' function takes two integers as inputs and returns the sum.
-        print('counting num dev')
+        # print('counting num dev')
         return self.lib.GetNumDev()
 
     # short GetDMDTYPE(short DeviceNumber)
@@ -173,31 +174,11 @@ class D4100_USB_DLL(Server32):
         self.set_block_mode(devnum,0b11)
         self.set_block_address(devnum,0b1000)
         self.load_control(devnum)
+        # sleep(1)
+        self.load_control(devnum)
+        self.load_control(devnum)
+        self.load_control(devnum)
         self.set_block_mode(devnum,0b00)
-        # self.load_control(devnum)
-        # self.load_control(devnum)
-
-    # def set_wait(self,wait):
-    #     self.wait=wait
-
-    # def set_all_mirrors(self,devnum,on_off=True,rows=768,cols=1024,blocks=2):
-    #     self.set_tpe_enable(devnum,0)
-    #     block_size = rows//blocks
-    #     if on_off:
-    #         pattern = bytearray([0xff]*rows*(cols))
-    #     else:
-    #         pattern = bytearray([0x00]*rows*(cols))
-    #     # load rows
-    #     self.clear_fifos(devnum)
-    #     self.global_reset(devnum)
-    #     self.set_block_mode(devnum,0)
-    #     self.set_ns_flip(devnum,0)
-    #     self.set_row_mode(devnum,0b10)
-    #     self.set_row_address(devnum,0)
-    #     self.set_row_mode(devnum,0b01)
-    #     for i in range(blocks):
-    #         self.load_data(devnum,pattern[i*block_size:(i+1)*block_size])
-    #     self.global_reset(devnum)    
 
     def _generate_array(self, inital_val=0):
         return  [[inital_val for x in range(self.cols)] for x in range(self.rows)] 
@@ -221,7 +202,7 @@ class D4100_USB_DLL(Server32):
         self.set_row_mode(devnum,0b01)
         for i in range(blocks):
             # current_row += block_size
-            print(self.load_data(devnum,row))
+            (self.load_data(devnum,row))
             # self.set_row_address(devnum, current_row)
             # sleep(self.wait)
             # print(self.get_row_address(devnum))
@@ -233,6 +214,33 @@ class D4100_USB_DLL(Server32):
 
     def all_mirrors_on(self,devnum):
         self.set_all_mirrors(devnum,0x00)
+
+    def bars(self,devnum, bars=2):
+        block_size = self.rows//bars
+        data = []
+        for bar in range(bars):
+            row =  [255*(bar%2) for x in range(block_size*self.cols//8)]
+            print(len(row))
+            data.extend(row)
+        blocks = 2
+        block_size = self.rows//blocks
+        print(block_size)
+        current_row = 0
+        self.clear_fifos(devnum)
+        self.global_reset(devnum)
+        self.set_block_mode(devnum,0)
+        self.set_ns_flip(devnum,0)
+        self.set_row_mode(devnum,0b10)
+        self.set_row_address(devnum,current_row)
+        self.set_row_mode(devnum,0b01)
+        # print(data)
+        print(len(data))
+        for i in range(blocks):
+            (block_size*i*self.cols//8,self.cols*block_size*(i+1)//8)
+            (self.load_data(devnum,data[block_size*i*self.cols//8:self.cols*block_size*(i+1)//8]))
+            # print(data[block_size*i*self.cols//8:self.cols*block_size*(i+1)//8])
+            # sleep(1)
+        self.global_reset(devnum)
 
     # int LoadData(UCHAR* RowData, unsigned int length, short DMDType, short DeviceNumber)
     def load_data(self,devnum,data):
@@ -256,22 +264,100 @@ class D4100_USB_DLL(Server32):
     def get_ns_flip(self,devnum):
         return self.lib.GetNSFLIP(devnum)
 
-# int program_FPGA(UCHAR* write_buffer, long write_size, short int DeviceNumber)
-# int GetDescriptor(int*, short DeviceNum)
-# short SetRST2BLKZ(short value, short DeviceNumber)
-# short GetRST2BLKZ(short DeviceNumber)
-# short SetCOMPDATA(short value, short DeviceNumber)
-# short GetCOMPDATA(short DeviceNumber)
-# short SetWDT(short value, short DeviceNumber)
-# short GetWDT(short DeviceNumber)
-# short SetEXTRESETENBL(short value, short DeviceNumber)
-# short GetEXTRESETENBL(short DeviceNumber)
-# short GetRESETCOMPLETE(int waittime, short int DeviceNumber)
-# short SetGPIORESETCOMPLETE(short DeviceNumber)
-# short GetSWOverrideEnable(short DeviceNumber)
-# short SetSWOverrideEnable(short value, short DeviceNumber)
-# short GetSWOverrideValue(short DeviceNumber)
-# short SetSWOverrideValue(short value, short DeviceNumber)
-# short GetLoad4(short DeviceNumber)
-# short SetLoad4(short value, short DeviceNumber)
 
+if __name__ == "__main__":
+    from PIL import Image
+    import numpy as np
+    import sys
+
+    def bmp_2_arr(path):
+        im = Image.open(path)
+        # im.show()
+        arr = np.asarray(im)
+        return arr
+
+    def arr_2_bitstream(arr):
+        return np.packbits(np.unpackbits(arr)[::8])
+
+    def chunks(lst, n):
+        """Yield successive n-sized chunks from lst."""
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
+
+    dmd = D4100_USB_DLL()
+    devnum = dmd.get_num_dev() - 1
+    if devnum < 0:
+        raise ValueError('No DMD devices found!')
+
+    path = sys.argv[1]
+    # print(path)
+    arr = bmp_2_arr(path)
+    data = arr_2_bitstream(arr)
+    
+    data1, data2 = np.array_split(data,2)
+    # d1 = Image.fromarray(data1.reshape(768//2,1024//8))
+    # d2 = Image.fromarray(data2.reshape(768//2,1024//8))
+    # d1.show()
+    # d2.show()
+    # input()
+    dmd.set_tpe_enable(devnum,0)
+    dmd.all_mirrors_off(devnum)
+    dmd.all_mirrors_on(devnum)
+    current_row = 0
+    # sleep(5)
+    # dmd.clear_fifos(devnum)
+    dmd.set_block_mode(devnum,0)
+    dmd.set_ns_flip(devnum,1)
+    dmd.set_row_mode(devnum,0b11)
+
+    # sleep(1)
+    dmd.load_data(devnum,data1[:128])
+    dmd.set_row_mode(devnum,0b01)
+    dmd.load_data(devnum,data1[128:])
+    # print(dmd.get_row_address(devnum))
+    dmd.global_reset(devnum)
+    dmd.set_row_mode(devnum,0b10)
+    dmd.set_row_address(devnum, 768//2 - 1)
+    dmd.load_data(devnum,data2[:128])
+    dmd.set_row_mode(devnum,0b01)
+    dmd.load_data(devnum,data2[128:])
+    dmd.global_reset(devnum)
+
+    # for row in range(768):
+    #     print(row)
+    #     dmd.set_block_mode(devnum,0)
+    #     # dmd.global_reset(devnum)
+    #     dmd.set_row_mode(devnum,0b10)
+    #     dmd.set_row_address(devnum,row)
+    #     # sleep(1)
+    #     dmd.set_row_mode(devnum,0b01)
+    #     dmd.load_data(devnum,data[128*row:(128*row)+128])
+    #     # sleep(0.1)
+    #     dmd.global_reset(devnum)
+    dmd.global_reset(devnum)
+    # print(list(data1[:]))
+    # input()
+    # print(dmd.get_row_address(devnum))
+    # print(dmd.get_block_address(devnum))
+    # (dmd.load_data(devnum,data1))
+
+    # current_row=768//2
+    # dmd.set_block_mode(devnum,0)
+    # dmd.set_ns_flip(devnum,0)
+    # dmd.set_row_mode(devnum,0b10)
+    # dmd.set_row_address(devnum,current_row)
+    # dmd.set_row_mode(devnum,0b01)
+    # print(dmd.get_row_address(devnum))
+    # print(dmd.get_block_address(devnum))
+    # print(list(data2[:]))
+    # input()
+    # (dmd.load_data(devnum,data2))
+    # sleep(1)
+    # dmd.global_reset(devnum)
+    # print(dmd.get_row_address(devnum))
+    # print(dmd.get_block_address(devnum))
+    dmd.global_reset(devnum)
+    sleep(1)
+    dmd.global_reset(devnum)
+    # dmd.global_reset(devnum)
+    # dmd.global_reset(devnum)
