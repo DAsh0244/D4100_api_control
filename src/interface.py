@@ -23,13 +23,15 @@ from atexit import ( register as _register, unregister as _unregister )
 
 # check what bit version python
 from struct import calcsize as _calcsize
-if calcsize('P')*8 == 64:
+if _calcsize('P')*8 == 64:
     from client64 import D4100_DLL as _dmd_dll
 else:
     raise NotImplementedError('native 32-bit support has not been implemented yet')
     from ctypes import cdll
     _dmd_dll = cdll('../lib/D4100_usb.dll')
-
+# encourage gc to remove _calcsize
+del _calcsize # removes namespace entry
+# del sys.modules['_calcsize']
 
 class DMDType(Enum):
     DLP9500 = 0

@@ -3,14 +3,18 @@ from time import sleep
 import os.path as osp
 import os
 
-class D4100_USB_DLL():
-    """A wrapper around the 32-bit USB_dll.dll, thta implements the stock D4100 conteoller firmware api."""
+class D4100_USB_DLL_MIXIN:
+    """
+    A partially implemented wrapper around the 32-bit D4100_usb.dll, thta implements the stock D4100 conteoller firmware api.
+    For Specifics on API,see https://www.ti.com/lit/ug/dlpu039/dlpu039.pdf
 
-    def __init__(self):
-        # Load the 'cpp_lib32' shared-library file using ctypes.CDLL.
-        self.lib = ctypes.CDLL(osp.join(osp.dirname(osp.abspath(__file__)), os.pardir, 'lib','D4100_usb.dll'))
-        # super().__init__('../lib/D4100_usb.dll', 'cdll', host, port, quiet)
-        self.lib.GetFPGARev.restype = ctypes.c_uint
+    This is designed to be subclassed to define the property 'lib', allowing for cross use in dedeicated 32-bit processes and IPC processes. 
+    As such, this cannot be used as is.
+    """
+    def __init__(self,*args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # presupposes lib gets defined in super call. 
+        self.lib.GetFPGARev.restype = ctypes.c_uint # force a return as a unint instead of typical int.
         # hard coded for now: 
         self.rows = 768
         self.cols = 1024
@@ -18,18 +22,28 @@ class D4100_USB_DLL():
         self.wait = 0.005
 
     @staticmethod
-    def _split_bytes(rev):
-        return (rev&0xFF00)>>8,rev&0x00FF
+    def _split_bytes(word):
+        """
+        Grab the lowest two bytes of a word
+        
+        Args:
+            word (integer): >=16-bit word
+
+        Returns:
+            tuple: Upper and lower bytes in the order (upper,lower)
+        """
+        return (word&0xFF00)>>8,word&0x00FF
 
     @staticmethod
-    def _split_wbytes(rev):
-        return (rev&0xFFFF0000)>>16,rev&0x0000FFFF
+    def _split_wbytes(word):
+        """
+        split a 64-bit word into upper and lower 32-bit words
+        Returns: 
+        """
+        return (word&0xFFFF0000)>>16,word&0x0000FFFF
 
     # short GetNumDev( )
     def get_num_dev(self):
-        # The Server32 class has a 'lib' property that is a reference to the ctypes.CDLL object.
-        # The shared library’s 'add' function takes two integers as inputs and returns the sum.
-        # print('counting num dev')
         return self.lib.GetNumDev()
 
     # short GetDMDTYPE(short DeviceNumber)
@@ -183,6 +197,9 @@ class D4100_USB_DLL():
     def _generate_array(self, inital_val=0):
         return  [[inital_val for x in range(self.cols)] for x in range(self.rows)] 
 
+    def get_rows(self):
+        return self.rows
+
     def set_wait(self,wait):
         self.wait=wait
 
@@ -244,10 +261,22 @@ class D4100_USB_DLL():
 
     # int LoadData(UCHAR* RowData, unsigned int length, short DMDType, short DeviceNumber)
     def load_data(self,devnum,data):
+        """Load data onto DMD SRAM
+        Configure addresses before calling this function
+
+        Args:
+            devnum (int): device number, see GetDevNum Documentation for what this should be. 
+            data ([type]): array data to load onto DMD - each bit corresponds to an individual mirror, and is loaded in right to lef row order
+
+        Returns:
+            (int): return code of the LoadData API call. 
+        """
+        # get dev type
         dmd_type = self.get_dmd_type(devnum)
+        # build data into ctypes uint8 array, take pointer to data for use in funciton call 
         dlen = len(data)
-        b_data = (ctypes.c_ubyte * dlen)()
-        for i,val in enumerate(data):
+        b_data = (ctypes.c_ubyte * dlen)() # allocate array
+        for i,val in enumerate(data): # initalize array to contents of data
             b_data[i] = val
         # print(b_data[:8],len(b_data))
         return self.lib.LoadData(ctypes.byref(b_data),dlen,dmd_type,devnum)
@@ -264,6 +293,35 @@ class D4100_USB_DLL():
     def get_ns_flip(self,devnum):
         return self.lib.GetNSFLIP(devnum)
 
+# TODO: implement the following for full api support
+# CONSIDER: passing a pointer is not viable between 64-32 bits...
+# int program_FPGA(UCHAR* write_buffer, long write_size, short int DeviceNumber) 
+# int GetDescriptor(int*, short DeviceNum)
+# short SetRST2BLKZ(short value, short DeviceNumber)
+# short GetRST2BLKZ(short DeviceNumber)
+# short SetCOMPDATA(short value, short DeviceNumber)
+# short GetCOMPDATA(short DeviceNumber)
+# short SetWDT(short value, short DeviceNumber)
+# short GetWDT(short DeviceNumber)
+# short SetEXTRESETENBL(short value, short DeviceNumber)
+# short GetEXTRESETENBL(short DeviceNumber)
+# short GetRESETCOMPLETE(int waittime, short int DeviceNumber)
+# short SetGPIORESETCOMPLETE(short DeviceNumber)
+# short GetSWOverrideEnable(short DeviceNumber)
+# short SetSWOverrideEnable(short value, short DeviceNumber)
+# short GetSWOverrideValue(short DeviceNumber)
+# short SetSWOverrideValue(short value, short DeviceNumber)
+# short GetLoad4(short DeviceNumber)
+# short SetLoad4(short value, short DeviceNumber)
+
+class D4100_USB_DLL(D4100_USB_DLL_MIXIN):
+    """
+    A wrapper around the 32-bit D4100_usb.dll, thta implements the stock D4100 conteoller firmware api.
+    For Specifics on API,see https://www.ti.com/lit/ug/dlpu039/dlpu039.pdf
+    """
+    def __init__(self):
+        # The Server32 class has a 'lib' property that is a reference to the ctypes.CDLL object.
+        self.lib = ctypes.CDLL(osp.join(osp.dirname(osp.abspath(__file__)), os.pardir, 'lib','D4100_usb.dll'))
 
 if __name__ == "__main__":
     from PIL import Image

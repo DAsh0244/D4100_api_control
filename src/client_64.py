@@ -1,6 +1,6 @@
 from msl.loadlib import Client64
 
-class D4100DLL(Client64):
+class D4100_USB_DLL(Client64):
     def __init__(self):
         super().__init__(module32='D4100_usb_32.py', quiet=True)
 
@@ -14,7 +14,7 @@ if __name__ == "__main__":
     from time import sleep
     sleeptime = 0.5
 
-    d4100_dll = D4100DLL()
+    d4100_dll = D4100_USB_DLL()
   
     devnum = d4100_dll.get_num_dev() - 1
     if devnum < 0:
