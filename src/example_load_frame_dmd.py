@@ -44,7 +44,7 @@ def chunks(lst, n):
 
 # instantiate dll instance 
 # behind the scenes is setting up a 32-bit process and the approrpiate IPC bridge
-d4100_dll = D4100DLL()
+dmd = D4100DLL()
 
 # query DLL to see how many DMDs are connected to PC's USB hubs
 # subtract 1 from result as a reuslt of the zero-indexing scheme 
@@ -66,6 +66,8 @@ data = arr_2_bitstream(arr)
 # frame loading takes at minumum 2 api calls, so go ahead and just split data 
 # could just as well be done via indexing, but this makes things more straightforward to see in my head
 data1, data2 = np.array_split(data,2)
+# force conversion back to lists
+data1,data2 = map(np.ndarray.tolist,[data1,data2])
 
 # uncomment the next lines to ensure splitting is working
 # d1 = Image.fromarray(data1.reshape(768//2,1024//8))
