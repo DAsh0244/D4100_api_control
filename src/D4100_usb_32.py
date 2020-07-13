@@ -5,30 +5,36 @@ from itertools import chain
 
 
 class D4100_USB_DLL(Server32):
-    """A wrapper around a 32-bit C++ library, 'cpp_lib32.dll', that has an 'add' function."""
+    """
+    A wrapper around the 32-bit D4100_usb.dll
+
+    For details on the api refer to:
+    https://www.ti.com/lit/ug/dlpu039/dlpu039.pdf
+    https://www.ti.com/lit/ds/dlps024g/dlps024g.pdf
+    """
 
     def __init__(self, host, port, quiet=False, **kwargs):
         # Load the 'cpp_lib32' shared-library file using ctypes.CDLL.
         super().__init__('../lib/D4100_usb.dll', 'cdll', host, port, quiet)
-        self.lib.GetFPGARev.restype = ctypes.c_uint
+        self.lib.GetFPGARev.restype = ctypes.c_uint # specify return type as unsigned to prevent signing occuring
         self.rows = 768
         self.cols = 1024
-        self.wait = 0.005
-
+        self.wait = 0.005 # tune this with the set_wait method until latency looks good for your system.
 
     @staticmethod
     def _split_bytes(rev):
+        "split a word into upper and lower bytes"
         return (rev&0xFF00)>>8,rev&0x00FF
 
     @staticmethod
     def _split_wbytes(rev):
+        "split a word into upper and lower 16-bit words (wide bytes)"
         return (rev&0xFFFF0000)>>16,rev&0x0000FFFF
 
     # short GetNumDev( )
     def get_num_dev(self):
-        # The Server32 class has a 'lib' property that is a reference to the ctypes.CDLL object.
-        # The shared library’s 'add' function takes two integers as inputs and returns the sum.
-        print('counting num dev')
+        "returns total number of devices seen by dll. any number from [0,get_num_dev-1] should be a valid device index"
+        # print('counting num dev')
         return self.lib.GetNumDev()
 
     # short GetDMDTYPE(short DeviceNumber)
@@ -173,31 +179,9 @@ class D4100_USB_DLL(Server32):
         self.set_block_mode(devnum,0b11)
         self.set_block_address(devnum,0b1000)
         self.load_control(devnum)
+        self.load_control(devnum)
+        self.load_control(devnum)
         self.set_block_mode(devnum,0b00)
-        # self.load_control(devnum)
-        # self.load_control(devnum)
-
-    # def set_wait(self,wait):
-    #     self.wait=wait
-
-    # def set_all_mirrors(self,devnum,on_off=True,rows=768,cols=1024,blocks=2):
-    #     self.set_tpe_enable(devnum,0)
-    #     block_size = rows//blocks
-    #     if on_off:
-    #         pattern = bytearray([0xff]*rows*(cols))
-    #     else:
-    #         pattern = bytearray([0x00]*rows*(cols))
-    #     # load rows
-    #     self.clear_fifos(devnum)
-    #     self.global_reset(devnum)
-    #     self.set_block_mode(devnum,0)
-    #     self.set_ns_flip(devnum,0)
-    #     self.set_row_mode(devnum,0b10)
-    #     self.set_row_address(devnum,0)
-    #     self.set_row_mode(devnum,0b01)
-    #     for i in range(blocks):
-    #         self.load_data(devnum,pattern[i*block_size:(i+1)*block_size])
-    #     self.global_reset(devnum)    
 
     def _generate_array(self, inital_val=0):
         return  [[inital_val for x in range(self.cols)] for x in range(self.rows)] 
@@ -206,6 +190,10 @@ class D4100_USB_DLL(Server32):
         self.wait=wait
 
     def set_all_mirrors(self,devnum,val):
+        """
+        hackish way of loading uniform data do the DMD
+        would not recommend using this
+        """
         self.set_tpe_enable(devnum,0)
         blocks = 2
         block_size = self.rows//blocks
@@ -274,4 +262,3 @@ class D4100_USB_DLL(Server32):
 # short SetSWOverrideValue(short value, short DeviceNumber)
 # short GetLoad4(short DeviceNumber)
 # short SetLoad4(short value, short DeviceNumber)
-
